@@ -2364,6 +2364,12 @@ impl LayoutEngine {
     /// - `\u{0015}` → 현재 쪽번호
     /// - `\u{0016}` → 총 쪽수
     /// - `\u{0017}` → 파일 이름
+    ///
+    /// [Task #3216] `convert_pua_display_text` 와 같은 규약을 따른다 — `run.text`(모델)는
+    /// 그대로 두고 `run.display_text` 에만 치환 결과를 쓴다. 마커 1자가 표시 N자로 늘어나는
+    /// 구조라(PUA 와 동형), 모델을 덮어쓰면 `line.char_start`·run `char_count` 누적이 표시
+    /// 길이 기준이 되어 HF 히트테스트가 모델에 없는 오프셋을 돌려준다. 그 오프셋으로는
+    /// 삽입이 clamp 되고 삭제가 조용히 무시돼 편집·undo 가 어긋난다.
     fn substitute_hf_field_markers(&self, comp: &mut ComposedParagraph, page_number: u32) {
         let total = self.total_pages.get();
         let file_name = self.file_name.borrow();
@@ -2371,26 +2377,21 @@ impl LayoutEngine {
         let total_str = total.to_string();
 
         for line in &mut comp.lines {
-            let mut new_runs = Vec::new();
-            for run in &line.runs {
+            for run in &mut line.runs {
                 if !run.text.contains('\u{0015}')
                     && !run.text.contains('\u{0016}')
                     && !run.text.contains('\u{0017}')
                 {
-                    new_runs.push(run.clone());
                     continue;
                 }
-                // 마커가 포함된 런 → 치환 후 분할
-                let replaced = run
-                    .text
-                    .replace('\u{0015}', &page_str)
-                    .replace('\u{0016}', &total_str)
-                    .replace('\u{0017}', &file_name);
-                let mut new_run = run.clone();
-                new_run.text = replaced;
-                new_runs.push(new_run);
+                // 이미 다른 표시 변환(PUA 등)이 적용됐으면 그 위에 이어서 치환한다.
+                let base = run.display_text.as_deref().unwrap_or(&run.text);
+                run.display_text = Some(
+                    base.replace('\u{0015}', &page_str)
+                        .replace('\u{0016}', &total_str)
+                        .replace('\u{0017}', &file_name),
+                );
             }
-            line.runs = new_runs;
         }
     }
 
