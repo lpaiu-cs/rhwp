@@ -848,7 +848,8 @@ impl crate::wmf::converter::Player for SVGPlayer {
                     self.context_current.drawing_position.y
                 } else {
                     record.y
-                } + match self.context_current.text_align_vertical {
+                }
+                .saturating_add(match self.context_current.text_align_vertical {
                     // [Task #965 / PR #918 Stage 33-A] WMF 의 ExtTextOut y 는
                     // text_align_vertical 에 따라 reference point 가 결정된다:
                     //   VTA_BASELINE (default): y 가 baseline — 그대로 사용
@@ -859,17 +860,17 @@ impl crate::wmf::converter::Player for SVGPlayer {
                     // -font.height 만큼 y 를 더했던 것은 잘못된 보정으로, 텍스트가 박스
                     // 하단으로 baseline shift 되는 원인).
                     VerticalTextAlignmentMode::VTA_TOP => {
-                        let em = font.height.abs();
+                        let em = i32::from(font.height).abs();
                         (em as f64 * 0.8) as i16
                     }
                     VerticalTextAlignmentMode::VTA_BOTTOM => {
-                        let em = font.height.abs();
+                        let em = i32::from(font.height).abs();
                         -((em as f64 * 0.2) as i16)
                     }
                     VerticalTextAlignmentMode::VTA_BASELINE => 0,
                     // VTA_CENTER / VTA_LEFT: 드물게 사용; baseline 과 동일 처리
                     _ => 0,
-                },
+                }),
             };
 
             let point = if self.context_current.text_align_update_cp {
@@ -978,8 +979,9 @@ impl crate::wmf::converter::Player for SVGPlayer {
                 let mut tspan = Node::new("tspan").add(Node::new_text(s));
 
                 if dx != 0 {
-                    let excess_dx = (font.height.abs() / 2) * i16::try_from(s.width()).unwrap_or(0);
-                    let dx = core::cmp::max(dx - excess_dx, 0);
+                    let excess_dx = (i32::from(font.height).abs() / 2)
+                        * i32::from(i16::try_from(s.width()).unwrap_or(0));
+                    let dx = core::cmp::max(i32::from(dx) - excess_dx, 0);
 
                     tspan = tspan.set("dx", dx);
                 }
@@ -999,9 +1001,12 @@ impl crate::wmf::converter::Player for SVGPlayer {
         }
 
         if self.context_current.text_align_update_cp {
-            let dx = (font.height.abs() / 2) * i16::try_from(text_content.width()).unwrap_or(0);
+            let dx = (i32::from(font.height).abs() / 2)
+                * i32::from(i16::try_from(text_content.width()).unwrap_or(0));
             let point = PointS {
-                x: point.x + dx,
+                x: point
+                    .x
+                    .saturating_add(i16::try_from(dx).unwrap_or(i16::MAX)),
                 y: point.y,
             };
             self.context_current = self.context_current.drawing_position(point);
@@ -1464,8 +1469,8 @@ impl crate::wmf::converter::Player for SVGPlayer {
             .set("fill-rule", fill_rule.as_str())
             .set("x", tl.x)
             .set("y", tl.y)
-            .set("height", br.y - tl.y)
-            .set("width", br.x - tl.x);
+            .set("height", i16_delta(br.y, tl.y))
+            .set("width", i16_delta(br.x, tl.x));
         let rect = stroke.set_props(rect);
 
         self.push_element(record_number, rect);
@@ -1559,21 +1564,22 @@ impl crate::wmf::converter::Player for SVGPlayer {
         let point = {
             let point = PointS {
                 x: record.x_start,
-                y: record.y_start
-                    + match self.context_current.text_align_vertical {
+                y: record
+                    .y_start
+                    .saturating_add(match self.context_current.text_align_vertical {
                         // [Task #965 / PR #918 Stage 33-A] META_TEXTOUT 의 y 도 동일.
                         // ext_text_out 의 baseline 보정과 일관성 유지.
                         VerticalTextAlignmentMode::VTA_TOP => {
-                            let em = font.height.abs();
+                            let em = i32::from(font.height).abs();
                             (em as f64 * 0.8) as i16
                         }
                         VerticalTextAlignmentMode::VTA_BOTTOM => {
-                            let em = font.height.abs();
+                            let em = i32::from(font.height).abs();
                             -((em as f64 * 0.2) as i16)
                         }
                         VerticalTextAlignmentMode::VTA_BASELINE => 0,
                         _ => 0,
-                    },
+                    }),
             };
 
             let point = if self.context_current.text_align_update_cp {
@@ -1762,8 +1768,8 @@ impl crate::wmf::converter::Player for SVGPlayer {
             let rect_node = Node::new("rect")
                 .set("x", rect.left)
                 .set("y", rect.top)
-                .set("width", rect.right - rect.left)
-                .set("height", rect.bottom - rect.top);
+                .set("width", i16_delta(rect.right, rect.left))
+                .set("height", i16_delta(rect.bottom, rect.top));
             clip = clip.add(rect_node);
             self.definitions.push(clip);
             self.current_clip_id = Some(id);

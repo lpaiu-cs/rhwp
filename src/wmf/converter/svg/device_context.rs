@@ -243,8 +243,8 @@ impl Window {
     }
 
     pub fn ext(mut self, x: i16, y: i16) -> Self {
-        self.x = x.abs();
-        self.y = y.abs();
+        self.x = x.saturating_abs();
+        self.y = y.saturating_abs();
         self.ext_explicitly_set = true;
         // [Task #860 Stage D] y < 0 = Cartesian 좌표계 (bottom-up) — 일부 application
         // 이 WMF 에 SetWindowExt(width, -height) 로 bottom-up 설정. SVG 변환 시
@@ -273,6 +273,6 @@ impl Window {
         // 변환 (Task #864). viewBox 도 이 device 공간 (0, 0, ext_x, ext_y) 으로 정합.
         // (Task #860 Stage D 의 (origin_x, origin_y, ...) 변경 revert — image 와 text
         // 의 좌표 공간이 mismatch 였던 본질을 정정.)
-        (0, 0, self.x.abs(), self.y.abs())
+        (0, 0, self.x.saturating_abs(), self.y.saturating_abs())
     }
 }

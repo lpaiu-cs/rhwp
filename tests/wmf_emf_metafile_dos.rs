@@ -21,6 +21,16 @@ fn i16le(v: i16) -> [u8; 2] {
 
 /// placeable(22B) + METAHEADER(18B) 프리픽스. 인자로 placeable 경계 사각형을 지정.
 fn wmf_header(left: i16, top: i16, right: i16, bottom: i16) -> Vec<u8> {
+    wmf_header_with_objects(left, top, right, bottom, 0)
+}
+
+fn wmf_header_with_objects(
+    left: i16,
+    top: i16,
+    right: i16,
+    bottom: i16,
+    number_of_objects: u16,
+) -> Vec<u8> {
     let mut b = Vec::new();
     b.extend_from_slice(&u32le(0x9AC6_CDD7)); // placeable key
     b.extend_from_slice(&u16le(0)); // hwmf
@@ -37,7 +47,7 @@ fn wmf_header(left: i16, top: i16, right: i16, bottom: i16) -> Vec<u8> {
     b.extend_from_slice(&u16le(9)); // header size (words)
     b.extend_from_slice(&u16le(0x0300)); // version
     b.extend_from_slice(&u32le(0)); // size
-    b.extend_from_slice(&u16le(0)); // number of objects
+    b.extend_from_slice(&u16le(number_of_objects)); // number of objects
     b.extend_from_slice(&u32le(0)); // max record
     b.extend_from_slice(&u16le(0)); // number of members
     assert_eq!(b.len(), 40);
@@ -48,6 +58,25 @@ fn eof_record() -> Vec<u8> {
     let mut b = Vec::new();
     b.extend_from_slice(&u32le(3)); // record size (words)
     b.extend_from_slice(&u16le(0x0000)); // META_EOF
+    b
+}
+
+fn create_dash_pen_record(width: i16) -> Vec<u8> {
+    let mut b = Vec::new();
+    b.extend_from_slice(&u32le(8)); // 16 bytes / 8 words
+    b.extend_from_slice(&u16le(0x02FA)); // META_CREATEPENINDIRECT
+    b.extend_from_slice(&u16le(0x0001)); // PS_DASH
+    b.extend_from_slice(&i16le(width));
+    b.extend_from_slice(&i16le(0));
+    b.extend_from_slice(&[0, 0, 0, 0]); // black COLORREF
+    b
+}
+
+fn select_object_record(index: u16) -> Vec<u8> {
+    let mut b = Vec::new();
+    b.extend_from_slice(&u32le(4));
+    b.extend_from_slice(&u16le(0x012D)); // META_SELECTOBJECT
+    b.extend_from_slice(&u16le(index));
     b
 }
 
@@ -123,6 +152,17 @@ fn wmf_placeable_bounds_overflow_is_graceful() {
 fn wmf_arc_bounds_overflow_is_graceful() {
     let mut data = wmf_header(-32768, -32768, 32767, 32767);
     data.extend_from_slice(&arc_record(-32768, -32768, 32767, 32767));
+    data.extend_from_slice(&eof_record());
+    convert_wmf(&data);
+}
+
+/// 큰 dashed pen 폭의 dash-array 배율 계산이 i16 범위를 넘어도 패닉하지 않는다.
+#[test]
+fn wmf_dash_pen_width_overflow_is_graceful() {
+    let mut data = wmf_header_with_objects(0, 0, 1000, 1000, 1);
+    data.extend_from_slice(&create_dash_pen_record(i16::MAX));
+    data.extend_from_slice(&select_object_record(0));
+    data.extend_from_slice(&arc_record(0, 0, 100, 100));
     data.extend_from_slice(&eof_record());
     convert_wmf(&data);
 }
