@@ -40,7 +40,13 @@ impl crate::wmf::parser::META_ESCAPE {
                 + enhanced_metafile_data_size_bytes,
         );
 
-        let expected_byte_count = enhanced_metafile_data_size + 34;
+        let expected_byte_count = enhanced_metafile_data_size.checked_add(34).ok_or_else(|| {
+            crate::wmf::parser::ParseError::UnexpectedPattern {
+                cause: format!(
+                    "The enhanced_metafile_data_size `{enhanced_metafile_data_size:#010X}` field is too large"
+                ),
+            }
+        })?;
 
         if u32::from(byte_count) != expected_byte_count {
             return Err(crate::wmf::parser::ParseError::UnexpectedPattern {

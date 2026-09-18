@@ -90,6 +90,25 @@ fn arc_record(left: i16, top: i16, right: i16, bottom: i16) -> Vec<u8> {
     b
 }
 
+fn enhanced_metafile_escape_record(data_size: u32) -> Vec<u8> {
+    let mut b = Vec::new();
+    b.extend_from_slice(&u32le(22)); // 44 bytes / 22 words
+    b.extend_from_slice(&u16le(0x0626)); // META_ESCAPE
+    b.extend_from_slice(&u16le(0x000F)); // META_ESCAPE_ENHANCED_METAFILE
+    b.extend_from_slice(&u16le(0)); // byte_count
+    b.extend_from_slice(&u32le(0x4346_4D57)); // "WMFC"
+    b.extend_from_slice(&u32le(1)); // comment_type
+    b.extend_from_slice(&u32le(0x0001_0000)); // version
+    b.extend_from_slice(&u16le(0)); // checksum
+    b.extend_from_slice(&u32le(0)); // flags
+    b.extend_from_slice(&u32le(1)); // comment_record_count
+    b.extend_from_slice(&u32le(0)); // current_record_size
+    b.extend_from_slice(&u32le(0)); // remaining_bytes
+    b.extend_from_slice(&u32le(data_size));
+    debug_assert_eq!(b.len(), 44);
+    b
+}
+
 /// META_STRETCHDIB 캐리어 (Info 40B DIB 헤더).
 fn stretchdib_info(width: i32, bit_count: u16) -> Vec<u8> {
     let mut b = wmf_header(0, 0, 100, 100);
@@ -163,6 +182,15 @@ fn wmf_dash_pen_width_overflow_is_graceful() {
     data.extend_from_slice(&create_dash_pen_record(i16::MAX));
     data.extend_from_slice(&select_object_record(0));
     data.extend_from_slice(&arc_record(0, 0, 100, 100));
+    data.extend_from_slice(&eof_record());
+    convert_wmf(&data);
+}
+
+/// Enhanced-metafile escape의 데이터 길이가 u32 상한이어도 길이 검증에서 패닉하지 않는다.
+#[test]
+fn wmf_enhanced_metafile_size_overflow_is_graceful() {
+    let mut data = wmf_header(0, 0, 100, 100);
+    data.extend_from_slice(&enhanced_metafile_escape_record(u32::MAX));
     data.extend_from_slice(&eof_record());
     convert_wmf(&data);
 }

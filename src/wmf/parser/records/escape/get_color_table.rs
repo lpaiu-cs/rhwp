@@ -9,11 +9,18 @@ impl crate::wmf::parser::META_ESCAPE {
             crate::wmf::parser::read_u16_from_le_bytes(buf)?,
         );
         record_size.consume(byte_count_bytes + start_bytes);
+        let color_table_length = byte_count.checked_sub(start).ok_or_else(|| {
+            crate::wmf::parser::ParseError::UnexpectedPattern {
+                cause: format!(
+                    "The start `{start:#06X}` field must be less than or equal to byte_count `{byte_count:#06X}`"
+                ),
+            }
+        })?;
         let (_, c) = crate::wmf::parser::read_variable(buf, start as usize)?;
         record_size.consume(c);
 
         let (color_table_buffer, c) =
-            crate::wmf::parser::read_variable(buf, (byte_count - start) as usize)?;
+            crate::wmf::parser::read_variable(buf, color_table_length as usize)?;
         record_size.consume(c);
 
         crate::wmf::parser::records::consume_remaining_bytes(buf, record_size)?;

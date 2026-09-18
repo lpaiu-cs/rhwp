@@ -28,11 +28,17 @@ impl crate::wmf::parser::META_ESCAPE {
             });
         }
 
-        let data_length = size
-            - (u32::try_from(size_of::<crate::wmf::parser::PointL>())
-                .expect("should be convert u32")
-                + 4
-                + 4);
+        let fixed_size = u32::try_from(size_of::<crate::wmf::parser::PointL>())
+            .expect("should be convert u32")
+            + 4
+            + 4;
+        let data_length = size.checked_sub(fixed_size).ok_or_else(|| {
+            crate::wmf::parser::ParseError::UnexpectedPattern {
+                cause: format!(
+                    "The size `{size:#010X}` field must be greater than or equal to `{fixed_size}`"
+                ),
+            }
+        })?;
         let (data, c) = crate::wmf::parser::read_variable(buf, data_length as usize)?;
         record_size.consume(c);
 
