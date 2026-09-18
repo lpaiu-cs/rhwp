@@ -51,6 +51,16 @@ fn eof_record() -> Vec<u8> {
     b
 }
 
+fn arc_record(left: i16, top: i16, right: i16, bottom: i16) -> Vec<u8> {
+    let mut b = Vec::new();
+    b.extend_from_slice(&u32le(11)); // 22 bytes / 11 words
+    b.extend_from_slice(&u16le(0x0817)); // META_ARC
+    for v in [32767, 32767, 32767, 32767, bottom, right, top, left] {
+        b.extend_from_slice(&i16le(v));
+    }
+    b
+}
+
 /// META_STRETCHDIB 캐리어 (Info 40B DIB 헤더).
 fn stretchdib_info(width: i32, bit_count: u16) -> Vec<u8> {
     let mut b = wmf_header(0, 0, 100, 100);
@@ -104,6 +114,15 @@ fn convert_wmf(data: &[u8]) {
 #[test]
 fn wmf_placeable_bounds_overflow_is_graceful() {
     let mut data = wmf_header(-32768, -32768, 32767, 32767);
+    data.extend_from_slice(&eof_record());
+    convert_wmf(&data);
+}
+
+/// META_ARC 경계 좌표의 반경·중점 계산이 i16 범위를 넘어도 패닉하지 않는다.
+#[test]
+fn wmf_arc_bounds_overflow_is_graceful() {
+    let mut data = wmf_header(-32768, -32768, 32767, 32767);
+    data.extend_from_slice(&arc_record(-32768, -32768, 32767, 32767));
     data.extend_from_slice(&eof_record());
     convert_wmf(&data);
 }

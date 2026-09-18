@@ -1,5 +1,10 @@
 use crate::wmf::converter::{svg::util::css_color_from_color_ref, *};
 
+#[inline]
+fn scaled_axis_delta(value: i16, origin: i16, scale: f32) -> i16 {
+    (((i32::from(value) - i32::from(origin)).abs() as f32) / scale) as i16
+}
+
 #[derive(Clone, Debug)]
 pub struct DeviceContext {
     // graphics object
@@ -174,17 +179,17 @@ impl DeviceContext {
     }
 
     pub fn point_s_to_absolute_point(&self, point: &PointS) -> PointS {
-        let x = (f32::from((point.x - self.window.origin_x).abs()) / self.window.scale_x) as i16;
-        let y = (f32::from((point.y - self.window.origin_y).abs()) / self.window.scale_y) as i16;
+        let x = scaled_axis_delta(point.x, self.window.origin_x, self.window.scale_x);
+        let y = scaled_axis_delta(point.y, self.window.origin_y, self.window.scale_y);
 
         PointS { x, y }
     }
 
     pub fn point_s_to_relative_point(&self, point: &PointS) -> PointS {
-        let x = (f32::from((point.x - self.window.origin_x).abs()) / self.window.scale_x) as i16
-            + self.drawing_position.x;
-        let y = (f32::from((point.y - self.window.origin_y).abs()) / self.window.scale_y) as i16
-            + self.drawing_position.y;
+        let x = scaled_axis_delta(point.x, self.window.origin_x, self.window.scale_x)
+            .saturating_add(self.drawing_position.x);
+        let y = scaled_axis_delta(point.y, self.window.origin_y, self.window.scale_y)
+            .saturating_add(self.drawing_position.y);
 
         PointS { x, y }
     }

@@ -168,8 +168,12 @@ jobs:
             const before = caches.reduce((n, c) => n + c.size_in_bytes, 0);
             core.info(`현재 캐시 ${caches.length}개 / ${gb(before)}GiB (열린 PR ${openPrs.length}건 보호)`);
 
-            // 키에서 후행 해시를 떼어 논리 그룹으로 묶는다.
-            const groupOf = (key) => key.replace(/[-_][0-9a-f]{8,}$/, '');
+            // 키에서 동적 후행 해시를 떼어 논리 그룹으로 묶는다. rust-cache 는
+            // toolchain hash + lock hash 두 개를 붙이므로 둘 다 제거해야 nightly toolchain
+            // 갱신이 새 논리 그룹으로 누적되지 않는다. 그 외 캐시는 기존처럼 하나만 뗀다.
+            const groupOf = (key) => key.startsWith('v0-rust-')
+              ? key.replace(/(?:[-_][0-9a-f]{8,}){2}$/, '')
+              : key.replace(/[-_][0-9a-f]{8,}$/, '');
 
             const orphans = [];
             const groups = new Map();

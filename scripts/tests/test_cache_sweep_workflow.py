@@ -283,6 +283,17 @@ class CacheSweepWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(out["deleted"], [], "ref 가 다르면 서로의 세대를 잠식하지 않는다")
 
+    def test_rust_cache_toolchain_and_lock_hashes_share_generation_group(self):
+        out = self.run_sweep(
+            branches=[{"name": "main"}],
+            caches=[
+                cache(1, "v0-rust-fuzz-smoke-parse_wmf-Linux-x64-11111111-aaaaaaaa", "refs/heads/main", "2026-09-18T00:00:00Z"),
+                cache(2, "v0-rust-fuzz-smoke-parse_wmf-Linux-x64-22222222-aaaaaaaa", "refs/heads/main", "2026-09-17T00:00:00Z"),
+                cache(3, "v0-rust-fuzz-smoke-parse_wmf-Linux-x64-33333333-aaaaaaaa", "refs/heads/main", "2026-09-16T00:00:00Z"),
+            ],
+        )
+        self.assertEqual(out["deleted"], [3], "nightly toolchain hash 변화도 같은 rust-cache 세대로 묶는다")
+
     def test_dry_run_deletes_nothing(self):
         out = self.run_sweep(
             env={"DRY_RUN": "true"},

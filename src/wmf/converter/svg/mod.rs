@@ -17,6 +17,16 @@ use crate::wmf::{
     parser::*,
 };
 
+#[inline]
+fn i16_delta(end: i16, start: i16) -> i32 {
+    i32::from(end) - i32::from(start)
+}
+
+#[inline]
+fn i16_midpoint(a: i16, b: i16) -> i16 {
+    ((i32::from(a) + i32::from(b)) / 2) as i16
+}
+
 #[derive(Default)]
 pub struct SVGPlayer {
     context_stack: Vec<DeviceContext>,
@@ -637,18 +647,18 @@ impl crate::wmf::converter::Player for SVGPlayer {
             point
         };
         let (rx, ry) = (
-            (record.right_rect - record.left_rect) / 2,
-            (record.bottom_rect - record.top_rect) / 2,
+            i16_delta(record.right_rect, record.left_rect) / 2,
+            i16_delta(record.bottom_rect, record.top_rect) / 2,
         );
         let center = self.context_current.point_s_to_absolute_point(&PointS {
-            x: record.left_rect + rx,
-            y: record.top_rect + ry,
+            x: i16_midpoint(record.left_rect, record.right_rect),
+            y: i16_midpoint(record.top_rect, record.bottom_rect),
         });
         // Start and end vectors relative to the center of the ellipse
-        let start_dx = f32::from(start.x - center.x);
-        let start_dy = f32::from(start.y - center.y);
-        let end_dx = f32::from(end.x - center.x);
-        let end_dy = f32::from(end.y - center.y);
+        let start_dx = (i32::from(start.x) - i32::from(center.x)) as f32;
+        let start_dy = (i32::from(start.y) - i32::from(center.y)) as f32;
+        let end_dx = (i32::from(end.x) - i32::from(center.x)) as f32;
+        let end_dy = (i32::from(end.y) - i32::from(center.y)) as f32;
 
         // Calculate cross product to determine if the arc is larger than 180
         // degrees. Invert the sign because upper-left is origin.
@@ -680,15 +690,15 @@ impl crate::wmf::converter::Player for SVGPlayer {
     ))]
     fn chord(mut self, record_number: usize, record: META_CHORD) -> Result<Self, PlayError> {
         // Calculate ellipse center and radii from bounding rectangle
-        let rx = (record.right_rect - record.left_rect) / 2;
-        let ry = (record.bottom_rect - record.top_rect) / 2;
+        let rx = i16_delta(record.right_rect, record.left_rect) / 2;
+        let ry = i16_delta(record.bottom_rect, record.top_rect) / 2;
         if rx == 0 || ry == 0 {
             info!("META_CHORD is skipped because rx or ry is zero.");
             return Ok(self);
         }
         let center = self.context_current.point_s_to_absolute_point(&PointS {
-            x: record.left_rect + rx,
-            y: record.top_rect + ry,
+            x: i16_midpoint(record.left_rect, record.right_rect),
+            y: i16_midpoint(record.top_rect, record.bottom_rect),
         });
 
         // Convert radial endpoints from WMF coordinates to SVG absolute
@@ -746,8 +756,8 @@ impl crate::wmf::converter::Player for SVGPlayer {
     ))]
     fn ellipse(mut self, record_number: usize, record: META_ELLIPSE) -> Result<Self, PlayError> {
         let (rx, ry) = (
-            (record.right_rect - record.left_rect) / 2,
-            (record.bottom_rect - record.top_rect) / 2,
+            i16_delta(record.right_rect, record.left_rect) / 2,
+            i16_delta(record.bottom_rect, record.top_rect) / 2,
         );
 
         if rx == 0 || ry == 0 {
@@ -771,8 +781,8 @@ impl crate::wmf::converter::Player for SVGPlayer {
         let fill_rule = self.context_current.poly_fill_rule();
         let point = {
             let point = self.context_current.point_s_to_absolute_point(&PointS {
-                x: record.left_rect + rx,
-                y: record.top_rect + ry,
+                x: i16_midpoint(record.left_rect, record.right_rect),
+                y: i16_midpoint(record.top_rect, record.bottom_rect),
             });
 
             self.context_current = self.context_current.extend_window(&point);
@@ -1172,10 +1182,13 @@ impl crate::wmf::converter::Player for SVGPlayer {
         };
         let fill_rule = self.context_current.poly_fill_rule();
         let (rx, ry) = (
-            (record.right_rect - record.left_rect) / 2,
-            (record.bottom_rect - record.top_rect) / 2,
+            i16_delta(record.right_rect, record.left_rect) / 2,
+            i16_delta(record.bottom_rect, record.top_rect) / 2,
         );
-        let (center_x, center_y) = (record.left_rect + rx, record.top_rect + ry);
+        let (center_x, center_y) = (
+            i16_midpoint(record.left_rect, record.right_rect),
+            i16_midpoint(record.top_rect, record.bottom_rect),
+        );
 
         let ellipse = Node::new("ellipse")
             .set("fill", fill.as_str())
@@ -1471,8 +1484,8 @@ impl crate::wmf::converter::Player for SVGPlayer {
         record: META_ROUNDRECT,
     ) -> Result<Self, PlayError> {
         let (width, height) = (
-            record.right_rect - record.left_rect,
-            record.bottom_rect - record.top_rect,
+            i16_delta(record.right_rect, record.left_rect),
+            i16_delta(record.bottom_rect, record.top_rect),
         );
 
         if width == 0 || height == 0 {
